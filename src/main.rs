@@ -2,6 +2,7 @@ mod filesize;
 mod groups;
 mod unique_id;
 mod walk;
+use colored::Colorize;
 use walk::Walk;
 
 use clap::builder::styling;
@@ -115,9 +116,14 @@ fn print_result(
         }
     }
     if atty::is(atty::Stream::Stdout) {
-        println!("\nTotal:  {: >10}", format_size(total, size_format));
+        println!(
+            "\n{}  \n{: >10}",
+            "Total: ".bold().cyan(),
+            format_size(total, size_format)
+        );
     } else {
-        println!("\nTotal:  {}", total);
+        println!("\nTotal:  \n{}", total);
+        println!("\n{}  \n{}", "Total: ".bold().cyan(), total);
     }
 }
 

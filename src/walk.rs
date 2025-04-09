@@ -134,10 +134,7 @@ impl<'a> Walk<'a> {
                                 }
                                 GroupBy::Extension => {
                                     let ext = get_ext(path);
-                                    sizes
-                                        .entry(ext)
-                                        .and_modify(|s| *s += size)
-                                        .or_insert(size);
+                                    sizes.entry(ext).and_modify(|s| *s += size).or_insert(size);
                                 }
                                 GroupBy::FileName => {
                                     let filename = get_filename(path);
@@ -147,6 +144,7 @@ impl<'a> Walk<'a> {
                                         .or_insert(size);
                                 }
                             }
+                            total += size;
                         } else {
                             total += size;
                         }
