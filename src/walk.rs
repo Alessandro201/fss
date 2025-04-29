@@ -83,6 +83,15 @@ fn get_filename<P: AsRef<Path>>(path: P) -> String {
         .to_owned()
 }
 
+fn get_parent_directory<P: AsRef<Path>>(path: P) -> String {
+    path.as_ref()
+        .parent()
+        .unwrap_or(Path::new(""))
+        .to_str()
+        .unwrap_or_default()
+        .to_owned()
+}
+
 pub struct Walk<'a> {
     root_dirs: &'a Vec<PathBuf>,
     num_threads: usize,
@@ -140,6 +149,13 @@ impl<'a> Walk<'a> {
                                     let filename = get_filename(path);
                                     sizes
                                         .entry(filename)
+                                        .and_modify(|s| *s += size)
+                                        .or_insert(size);
+                                }
+                                GroupBy::Directory => {
+                                    let parent = get_parent_directory(path);
+                                    sizes
+                                        .entry(parent)
                                         .and_modify(|s| *s += size)
                                         .or_insert(size);
                                 }

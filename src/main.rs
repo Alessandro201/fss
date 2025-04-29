@@ -26,18 +26,15 @@ const STYLES: styling::Styles = styling::Styles::styled()
 struct Cli {
     /// Select how to group the files sizes
     ///
-    /// -f   file nam
+    /// -f   file name
     /// -e   extension
+    /// -d   parent directory
     /// -t   file type, eg. Images, Videos, Documents...
-    #[arg(short, long, default_value = "e", value_parser=["f","e","t"], long_help)]
+    #[arg(short, long, default_value = "e", value_parser=["f","e","t", "d"], long_help)]
     group_by: String,
 
-    /// Print the sizes of folders
-    #[arg(short, long, default_value_t = false, action=ArgAction::SetTrue)]
-    directories: bool,
-
-    /// Output format for file sizes (decimal: MB, binary: MiB)
-    #[arg(short, long, default_value = "decimal", value_parser=["decimal", "binary"])]
+    /// Output format for file sizes (decimal: base-10 MB, binary: base 2 MiB, bytes: raw byte count B)
+    #[arg(short, long, default_value = "decimal", value_parser=["decimal", "binary", "bytes"])]
     size_format: String,
 
     /// Compute apparent size instead of disk usage
@@ -74,13 +71,17 @@ pub enum GroupBy {
 
     /// Groups by file name
     FileName,
+
+    /// Groups by parent directory
+    Directory,
 }
 
+#[allow(clippy::collapsible_else_if)]
 fn print_result(
     total: u64,
     sizes: HashMap<String, u64>,
     errors: &[walk::Error],
-    size_format: &FormatSizeOptions,
+    size_format: Option<FormatSizeOptions>,
     verbose: bool,
 ) {
     if verbose {
@@ -107,23 +108,25 @@ fn print_result(
     }
 
     let mut sorted_sizes: Vec<(String, u64)> = sizes.into_iter().collect();
-    sorted_sizes.sort_by_key(|(_k, v)| *v);
-    for (group, size) in sorted_sizes.iter().rev() {
-        if atty::is(atty::Stream::Stdout) {
+    sorted_sizes.sort_unstable_by_key(|(_k, v)| *v);
+    for (group, size) in sorted_sizes.iter() {
+        if let Some(size_format) = size_format {
             println!("{: >10}\t{}", format_size(*size, size_format), group);
         } else {
             println!("{}\t{}", size, group);
         }
     }
+
     if atty::is(atty::Stream::Stdout) {
-        println!(
-            "\n{}  \n{: >10}",
-            "Total: ".bold().cyan(),
-            format_size(total, size_format)
-        );
-    } else {
-        println!("\nTotal:  \n{}", total);
-        println!("\n{}  \n{}", "Total: ".bold().cyan(), total);
+        if let Some(size_format) = size_format {
+            println!(
+                "\n{}  \n{: >10}",
+                "Total: ".bold().cyan(),
+                format_size(total, size_format)
+            );
+        } else {
+            println!("\n{}  \n{: >10}", "Total: ".bold().cyan(), total);
+        }
     }
 }
 
@@ -131,8 +134,9 @@ fn main() {
     let cli = Cli::parse();
 
     let size_format = match cli.size_format.as_str() {
-        "decimal" => humansize::DECIMAL,
-        "binary" => humansize::BINARY,
+        "decimal" => Some(humansize::DECIMAL),
+        "binary" => Some(humansize::BINARY),
+        "bytes" => None,
         _ => panic!(
             "Filesize_type should not have been a string different from \"decimal\" or \"binary\""
         ),
@@ -148,12 +152,13 @@ fn main() {
         "f" => GroupBy::FileName,
         "e" => GroupBy::Extension,
         "t" => GroupBy::Type,
+        "d" => GroupBy::Directory,
         _ => {
-            panic!("--group should not have been a string different from \"t\", \"e\", \"f\",\" ")
+            panic!("--group should not have been a string different from 't', 'e', 'f', 'd' ")
         }
     };
 
     let walk = Walk::new(&cli.inputs, cli.threads, filesize_type, group_by);
     let (total, sizes, errors) = walk.run();
-    print_result(total, sizes, &errors, &size_format, cli.verbose);
+    print_result(total, sizes, &errors, size_format, cli.verbose);
 }
