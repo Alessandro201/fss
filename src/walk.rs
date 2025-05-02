@@ -1,6 +1,6 @@
+use crate::cli::GroupBy;
 use rayon::prelude::*;
 
-use crate::GroupBy;
 use crate::{
     groups::FileType,
     unique_id::{UniqueID, generate_unique_id},
@@ -15,11 +15,13 @@ use std::{
     thread,
 };
 
+#[derive(Debug)]
 pub enum Error {
     NoMetadataForPath(PathBuf),
     CouldNotReadDir(PathBuf),
 }
 
+#[derive(Debug)]
 enum Message {
     SizeEntry(Option<UniqueID>, PathBuf, u64),
     Error { error: Error },
@@ -31,10 +33,6 @@ fn walk(tx: channel::Sender<Message>, entries: &[PathBuf], filesize_type: Filesi
             let unique_id = generate_unique_id(&metadata);
 
             let size = filesize_type.size(&metadata);
-
-            tx_ref
-                .send(Message::SizeEntry(unique_id, entry.to_path_buf(), size))
-                .unwrap();
 
             if metadata.is_dir() {
                 let mut children = vec![];
@@ -54,6 +52,10 @@ fn walk(tx: channel::Sender<Message>, entries: &[PathBuf], filesize_type: Filesi
                 }
 
                 walk(tx_ref.clone(), &children[..], filesize_type);
+            } else {
+                tx_ref
+                    .send(Message::SizeEntry(unique_id, entry.to_owned(), size))
+                    .unwrap();
             };
         } else {
             tx_ref
@@ -65,28 +67,30 @@ fn walk(tx: channel::Sender<Message>, entries: &[PathBuf], filesize_type: Filesi
     });
 }
 
-fn get_ext<P: AsRef<Path>>(path: P) -> String {
-    path.as_ref()
-        .extension()
-        .unwrap_or(path.as_ref().file_name().unwrap_or_default())
-        .to_ascii_lowercase()
+#[inline(always)]
+fn get_ext(path: &Path) -> String {
+    path.extension()
+        .unwrap_or_default()
         .to_str()
         .unwrap_or_default()
-        .to_owned()
+        .to_ascii_lowercase()
 }
-fn get_filename<P: AsRef<Path>>(path: P) -> String {
-    path.as_ref()
-        .file_name()
+
+#[inline(always)]
+fn get_filename(path: &Path) -> String {
+    path.file_name()
         .unwrap_or_default()
         .to_str()
         .unwrap_or_default()
         .to_owned()
 }
 
-fn get_parent_directory<P: AsRef<Path>>(path: P) -> String {
-    path.as_ref()
-        .parent()
+#[inline(always)]
+fn get_parent_directory(path: &Path) -> String {
+    path.parent()
         .unwrap_or(Path::new(""))
+        .file_name()
+        .unwrap_or_default()
         .to_str()
         .unwrap_or_default()
         .to_owned()
@@ -132,37 +136,35 @@ impl<'a> Walk<'a> {
                             if !ids.insert(unique_id) {
                                 continue;
                             }
+                        }
 
-                            match group_by {
-                                GroupBy::Type => {
-                                    let filetype = FileType::get_filetype(&get_ext(path));
-                                    sizes
-                                        .entry(filetype.to_string())
-                                        .and_modify(|s| *s += size)
-                                        .or_insert(size);
-                                }
-                                GroupBy::Extension => {
-                                    let ext = get_ext(path);
-                                    sizes.entry(ext).and_modify(|s| *s += size).or_insert(size);
-                                }
-                                GroupBy::FileName => {
-                                    let filename = get_filename(path);
-                                    sizes
-                                        .entry(filename)
-                                        .and_modify(|s| *s += size)
-                                        .or_insert(size);
-                                }
-                                GroupBy::Directory => {
-                                    let parent = get_parent_directory(path);
-                                    sizes
-                                        .entry(parent)
-                                        .and_modify(|s| *s += size)
-                                        .or_insert(size);
-                                }
+                        total += size;
+                        match group_by {
+                            GroupBy::Type => {
+                                let filetype = FileType::get_filetype(&get_ext(&path)).to_string();
+                                sizes
+                                    .entry(filetype)
+                                    .and_modify(|s| *s += size)
+                                    .or_insert(size);
                             }
-                            total += size;
-                        } else {
-                            total += size;
+                            GroupBy::Extension => {
+                                let ext = get_ext(&path);
+                                sizes.entry(ext).and_modify(|s| *s += size).or_insert(size);
+                            }
+                            GroupBy::FileName => {
+                                let filename = get_filename(&path);
+                                sizes
+                                    .entry(filename)
+                                    .and_modify(|s| *s += size)
+                                    .or_insert(size);
+                            }
+                            GroupBy::Directory => {
+                                let parent = get_parent_directory(&path);
+                                sizes
+                                    .entry(parent)
+                                    .and_modify(|s| *s += size)
+                                    .or_insert(size);
+                            }
                         }
                     }
                     Message::Error { error } => {

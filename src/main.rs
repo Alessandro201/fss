@@ -1,87 +1,24 @@
+pub mod cli;
 mod filesize;
+mod filter;
 mod groups;
 mod unique_id;
 mod walk;
+use clap::Parser;
 use colored::Colorize;
+use filter::SizeFilter;
 use walk::Walk;
 
-use clap::builder::styling;
-use clap::{ArgAction, Parser, ValueEnum, value_parser};
 use filesize::FilesizeType;
 use humansize::{FormatSizeOptions, format_size};
 use std::collections::HashMap;
-use std::path::PathBuf;
 
-const STYLES: styling::Styles = styling::Styles::styled()
-    .header(styling::AnsiColor::Green.on_default().bold())
-    .usage(styling::AnsiColor::Green.on_default().bold())
-    .literal(styling::AnsiColor::Blue.on_default().bold())
-    .placeholder(styling::AnsiColor::Cyan.on_default());
-
-/// Computes disk-usage for the given entries and groups them by extension or file types
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-#[command(name = "fss")]
-#[command(styles=STYLES)]
-struct Cli {
-    /// Select how to group the files sizes
-    ///
-    /// -f   file name
-    /// -e   extension
-    /// -d   parent directory
-    /// -t   file type, eg. Images, Videos, Documents...
-    #[arg(short, long, default_value = "e", value_parser=["f","e","t", "d"], long_help)]
-    group_by: String,
-
-    /// Output format for file sizes (decimal: base-10 MB, binary: base 2 MiB, bytes: raw byte count B)
-    #[arg(short, long, default_value = "decimal", value_parser=["decimal", "binary", "bytes"])]
-    size_format: String,
-
-    /// Compute apparent size instead of disk usage
-    #[cfg(not(windows))]
-    #[arg(short='b', long, default_value_t = false, action=ArgAction::SetTrue)]
-    apparent_size: bool,
-
-    /// Set the number of threads to use. Default 3 x num cores
-    // Setting the number of threads to 3x the number of cores is a good tradeoff between
-    // cold-cache and warm-cache runs. For a cold disk cache, we are limited by disk IO and
-    // therefore want the number of threads to be rather large in order for the IO scheduler to
-    // plan ahead. On the other hand, the number of threads shouldn't be too high for warm disk
-    // caches where we would otherwise pay a higher synchronization overhead.
-    #[arg(short = 'j', long, default_value_t =3 * num_cpus::get())]
-    threads: usize,
-
-    /// Do not hide filesystem errors
-    #[arg(short, long, default_value_t = false, action=ArgAction::SetTrue)]
-    verbose: bool,
-
-    /// List of paths
-    #[arg(default_value = ".", value_parser=value_parser!(PathBuf))]
-    inputs: Vec<PathBuf>,
-}
-
-#[derive(Default, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-pub enum GroupBy {
-    /// Groups by file type. e.g. Images, Videos, Documents...
-    Type,
-
-    /// Groups by file extension. This is the default
-    #[default]
-    Extension,
-
-    /// Groups by file name
-    FileName,
-
-    /// Groups by parent directory
-    Directory,
-}
-
-#[allow(clippy::collapsible_else_if)]
 fn print_result(
     total: u64,
     sizes: HashMap<String, u64>,
     errors: &[walk::Error],
     size_format: Option<FormatSizeOptions>,
+    size_filter: Vec<SizeFilter>,
     verbose: bool,
 ) {
     if verbose {
@@ -109,9 +46,13 @@ fn print_result(
 
     let mut sorted_sizes: Vec<(String, u64)> = sizes.into_iter().collect();
     sorted_sizes.sort_unstable_by_key(|(_k, v)| *v);
-    for (group, size) in sorted_sizes.iter() {
+    for (group, size) in sorted_sizes {
+        if size_filter.iter().any(|f| !f.is_within(size)) {
+            continue;
+        }
+
         if let Some(size_format) = size_format {
-            println!("{: >10}\t{}", format_size(*size, size_format), group);
+            println!("{: >10}\t{}", format_size(size, size_format), group);
         } else {
             println!("{}\t{}", size, group);
         }
@@ -131,7 +72,7 @@ fn print_result(
 }
 
 fn main() {
-    let cli = Cli::parse();
+    let cli = cli::Cli::parse();
 
     let size_format = match cli.size_format.as_str() {
         "decimal" => Some(humansize::DECIMAL),
@@ -148,17 +89,7 @@ fn main() {
         FilesizeType::DiskUsage
     };
 
-    let group_by = match cli.group_by.as_str() {
-        "f" => GroupBy::FileName,
-        "e" => GroupBy::Extension,
-        "t" => GroupBy::Type,
-        "d" => GroupBy::Directory,
-        _ => {
-            panic!("--group should not have been a string different from 't', 'e', 'f', 'd' ")
-        }
-    };
-
-    let walk = Walk::new(&cli.inputs, cli.threads, filesize_type, group_by);
+    let walk = Walk::new(&cli.inputs, cli.threads, filesize_type, cli.group_by);
     let (total, sizes, errors) = walk.run();
-    print_result(total, sizes, &errors, size_format, cli.verbose);
+    print_result(total, sizes, &errors, size_format, cli.size, cli.verbose);
 }

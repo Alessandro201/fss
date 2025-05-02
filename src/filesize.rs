@@ -6,6 +6,7 @@ pub enum FilesizeType {
 
 impl FilesizeType {
     #[cfg(not(windows))]
+    #[inline]
     pub fn size(self, metadata: &std::fs::Metadata) -> u64 {
         use std::os::unix::fs::MetadataExt;
 
@@ -17,6 +18,7 @@ impl FilesizeType {
     }
 
     #[cfg(windows)]
+    #[inline]
     pub fn size(self, metadata: &std::fs::Metadata) -> u64 {
         metadata.len()
     }

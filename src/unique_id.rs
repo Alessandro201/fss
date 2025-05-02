@@ -1,4 +1,4 @@
-#[derive(Eq, PartialEq, Hash)]
+#[derive(Eq, PartialEq, Hash, Debug)]
 pub struct UniqueID {
     device: u64,
     inode: u64,
