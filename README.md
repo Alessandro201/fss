@@ -15,6 +15,10 @@ Total:
  627.52 MB
 ```
 
+## Citations
+The code for this app was adapted from [diskus](https://github.com/sharkdp/diskus) by sharkdp. Furthermore the size filtering was taken from [fd](https://github.com/sharkdp/fd) by the same author.
+He makes some really great programs, go check them out!
+
 ## Usage
 ```bash
 Computes disk-usage for the given entries and groups them by extension or file types
@@ -119,9 +123,3 @@ This is the full list of extension per file type
 ### GenomicData
 
 ### Other
-
-
-
-# Disclaimer & Citations
-The code for this app was adapted from [diskus](https://github.com/sharkdp/diskus) by sharkdp. Furthermore the size filtering was taken from [fd](https://github.com/sharkdp/fd) by the same author.
-He makes some really great programs, go check them out!
