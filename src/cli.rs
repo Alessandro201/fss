@@ -2,6 +2,7 @@ use crate::filter::SizeFilter;
 use std::path::PathBuf;
 
 use clap::{ArgAction, Parser, ValueEnum, builder::styling, value_parser};
+use humansize::format_size;
 
 const STYLES: styling::Styles = styling::Styles::styled()
     .header(styling::AnsiColor::Green.on_default().bold())
@@ -46,8 +47,8 @@ pub struct Cli {
     pub size: Vec<SizeFilter>,
 
     /// Output format for file sizes (decimal: base-10 MB, binary: base 2 MiB, bytes: raw byte count B)
-    #[arg(short, long, default_value = "decimal", value_parser=["decimal", "binary", "bytes"])]
-    pub size_format: String,
+    #[arg(short, long, default_value_t = FormatOption::Decimal, value_enum)]
+    pub size_format: FormatOption,
 
     /// Compute apparent size instead of disk usage
     #[cfg(not(windows))]
@@ -101,4 +102,28 @@ pub enum GroupBy {
 
     /// Groups by parent directory
     Directory,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
+pub enum FormatOption {
+    Decimal,
+    Binary,
+    Bytes,
+    Auto,
+}
+impl FormatOption {
+    pub fn format(&self, size: u64) -> String {
+        match self {
+            FormatOption::Decimal => format_size(size, humansize::DECIMAL),
+            FormatOption::Binary => format_size(size, humansize::BINARY),
+            FormatOption::Bytes => format!("{}", size),
+            FormatOption::Auto => {
+                if atty::is(atty::Stream::Stdout) {
+                    format_size(size, humansize::DECIMAL)
+                } else {
+                    format!("{}", size)
+                }
+            }
+        }
+    }
 }

@@ -9,15 +9,15 @@ use colored::Colorize;
 use filter::SizeFilter;
 use walk::Walk;
 
+use cli::FormatOption;
 use filesize::FilesizeType;
-use humansize::{FormatSizeOptions, format_size};
 use std::collections::HashMap;
 
 fn print_result(
     total: u64,
     sizes: HashMap<String, u64>,
     errors: &[walk::Error],
-    size_format: Option<FormatSizeOptions>,
+    size_format: FormatOption,
     size_filter: Vec<SizeFilter>,
     verbose: bool,
 ) {
@@ -51,37 +51,18 @@ fn print_result(
             continue;
         }
 
-        if let Some(size_format) = size_format {
-            println!("{: >10}\t{}", format_size(size, size_format), group);
-        } else {
-            println!("{}\t{}", size, group);
-        }
+        println!("{: >10}\t{}", size_format.format(size), group)
     }
 
-    if atty::is(atty::Stream::Stdout) {
-        if let Some(size_format) = size_format {
-            println!(
-                "\n{}  \n{: >10}",
-                "Total: ".bold().cyan(),
-                format_size(total, size_format)
-            );
-        } else {
-            println!("\n{}  \n{: >10}", "Total: ".bold().cyan(), total);
-        }
-    }
+    println!(
+        "\n{}\n{: >10}",
+        "Total: ".bold().cyan(),
+        size_format.format(total)
+    );
 }
 
 fn main() {
     let cli = cli::Cli::parse();
-
-    let size_format = match cli.size_format.as_str() {
-        "decimal" => Some(humansize::DECIMAL),
-        "binary" => Some(humansize::BINARY),
-        "bytes" => None,
-        _ => panic!(
-            "Filesize_type should not have been a string different from \"decimal\" or \"binary\""
-        ),
-    };
 
     let filesize_type = if cli.apparent_size {
         FilesizeType::ApparentSize
@@ -91,5 +72,12 @@ fn main() {
 
     let walk = Walk::new(&cli.inputs, cli.threads, filesize_type, cli.group_by);
     let (total, sizes, errors) = walk.run();
-    print_result(total, sizes, &errors, size_format, cli.size, cli.verbose);
+    print_result(
+        total,
+        sizes,
+        &errors,
+        cli.size_format,
+        cli.size,
+        cli.verbose,
+    );
 }
