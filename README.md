@@ -19,6 +19,14 @@ Total:
 The code for this app was adapted from [diskus](https://github.com/sharkdp/diskus) by sharkdp. Furthermore the size filtering was taken from [fd](https://github.com/sharkdp/fd) by the same author.
 He makes some really great programs, go check them out!
 
+## Installation
+```bash
+git clone https://github.com/Alessandro201/fss.git
+cd fss
+cargo build -r
+./target/release/fss --help
+```
+
 ## Usage
 ```bash
 Computes disk-usage for the given entries and groups them by extension or file types
