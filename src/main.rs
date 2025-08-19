@@ -61,7 +61,7 @@ fn print_result(
     );
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     let cli = cli::Cli::parse();
 
     let filesize_type = if cli.apparent_size {
@@ -71,7 +71,7 @@ fn main() {
     };
 
     let walk = Walk::new(&cli.inputs, cli.threads, filesize_type, cli.group_by);
-    let (total, sizes, errors) = walk.run();
+    let (total, sizes, errors) = walk.run()?;
     print_result(
         total,
         sizes,
@@ -80,4 +80,5 @@ fn main() {
         cli.size,
         cli.verbose,
     );
+    Ok(())
 }

@@ -118,7 +118,7 @@ impl<'a> Walk<'a> {
         }
     }
 
-    pub fn run(&self) -> (u64, HashMap<String, u64>, Vec<Error>) {
+    pub fn run(&self) -> anyhow::Result<(u64, HashMap<String, u64>, Vec<Error>)> {
         let (tx, rx) = channel::unbounded();
         let group_by = self.group_by;
 
@@ -177,10 +177,9 @@ impl<'a> Walk<'a> {
 
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(self.num_threads)
-            .build()
-            .unwrap();
+            .build()?;
         pool.install(|| walk(tx, self.root_dirs, self.filesize_type));
 
-        receiver_thread.join().unwrap()
+        Ok(receiver_thread.join().unwrap())
     }
 }
